@@ -40,7 +40,8 @@ function isolateVideoFunction() {
     "victoryplus.com": "#videoPlayerContainer video",
     "youtube.com": "#movie_player video",
     "vimeo.com": "video",
-    "x.com": "video"
+    "x.com": "video",
+    "twitch.tv": "video"
   };
 
   const hostname = window.location.hostname;

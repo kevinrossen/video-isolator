@@ -14,6 +14,7 @@ A Chrome extension that isolates video players by hiding everything else on the 
 - **x.com** — individual posts with video
 - **Vimeo** — video pages
 - **VictoryPlus.com** — video player pages
+- **Twitch** — live streams and VODs
 
 ## Install
 
