@@ -69,17 +69,13 @@ function isolateVideoFunction() {
     }
 
     if (config.strategy === "x-video") {
+      // Return the <video> element directly. X.com's custom player
+      // controls break after DOM extraction, so we use native
+      // browser controls instead. Grabbing just the video avoids
+      // including tweet text and poster info.
       const article = document.querySelector('article');
       if (!article) return null;
-
-      const video = article.querySelector('video');
-      if (!video) return null;
-
-      let container = video;
-      while (container.parentElement && container.parentElement !== article) {
-        container = container.parentElement;
-      }
-      return container;
+      return article.querySelector('video');
     }
 
     if (config.strategy === "vimeo-video") {
