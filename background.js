@@ -137,6 +137,17 @@ function isolateVideoFunction() {
   document.body.style.overflow = 'hidden';
   document.body.style.backgroundColor = '#000';
 
+  // Enable native browser controls on the video element so
+  // controls are always available, even when a site's custom
+  // controls break after DOM extraction (e.g. x.com).
+  const video = videoPlayer.querySelector('video');
+  if (video) {
+    video.setAttribute('controls', 'true');
+    video.style.width = '100%';
+    video.style.height = '100%';
+    video.style.objectFit = 'contain';
+  }
+
   return { success: true, message: "Video isolated!" };
 }
 
