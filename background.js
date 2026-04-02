@@ -137,16 +137,19 @@ function isolateVideoFunction() {
   document.body.style.overflow = 'hidden';
   document.body.style.backgroundColor = '#000';
 
-  // Enable native browser controls on the video element so
-  // controls are always available, even when a site's custom
-  // controls break after DOM extraction (e.g. x.com).
+  // Enable native browser controls and force them visible.
+  // Sites like x.com use CSS to hide native controls since they
+  // have their own custom UI, so we override with !important.
   const video = videoPlayer.querySelector('video');
   if (video) {
-    video.setAttribute('controls', 'true');
+    video.controls = true;
     video.style.width = '100%';
     video.style.height = '100%';
     video.style.objectFit = 'contain';
   }
+  const style = document.createElement('style');
+  style.textContent = 'video::-webkit-media-controls { display: flex !important; opacity: 1 !important; }';
+  document.head.appendChild(style);
 
   return { success: true, message: "Video isolated!" };
 }
