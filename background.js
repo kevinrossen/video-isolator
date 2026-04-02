@@ -137,14 +137,6 @@ function isolateVideoFunction() {
   document.body.style.overflow = 'hidden';
   document.body.style.backgroundColor = '#000';
 
-  // Make the actual video element fill the container
-  const video = videoPlayer.querySelector('video');
-  if (video) {
-    video.style.width = '100%';
-    video.style.height = '100%';
-    video.style.objectFit = 'contain';
-  }
-
   return { success: true, message: "Video isolated!" };
 }
 
