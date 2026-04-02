@@ -36,50 +36,54 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 // --- Injected into page context ---
 
 function isolateVideoFunction() {
-  const SITE_REGISTRY = {
-    "victoryplus.com": {
-      videoSelector: "#videoPlayerContainer video"
-    },
-    "youtube.com": {
-      videoSelector: "#movie_player video"
-    },
-    "vimeo.com": {
-      videoSelector: "video"
-    },
-    "x.com": {
-      videoSelector: "article video"
-    }
+  // Selectors to find the <video> element on each supported site.
+  const SITE_SELECTORS = {
+    "victoryplus.com": "#videoPlayerContainer video",
+    "youtube.com": "#movie_player video",
+    "vimeo.com": "video",
+    "x.com": "video"
   };
 
-  function findVideo(hostname) {
-    for (const [domain, config] of Object.entries(SITE_REGISTRY)) {
-      if (hostname === domain || hostname.endsWith('.' + domain)) {
-        return document.querySelector(config.videoSelector);
-      }
+  const hostname = window.location.hostname;
+  let selector = null;
+  for (const [domain, sel] of Object.entries(SITE_SELECTORS)) {
+    if (hostname === domain || hostname.endsWith('.' + domain)) {
+      selector = sel;
+      break;
     }
-    return null;
   }
 
-  const hostname = window.location.hostname;
-  const video = findVideo(hostname);
-
-  if (video === undefined) {
+  if (!selector) {
     return { success: false, message: "This site is not supported" };
   }
 
+  const video = document.querySelector(selector);
   if (!video) {
     return { success: false, message: "No video player found on this page" };
   }
 
-  // Overlay the video using CSS instead of moving it in the DOM.
-  // This preserves MediaSource connections, keeps the video playing,
-  // and maintains all event listeners.
+  // Add a black backdrop that covers everything on the page
+  const backdrop = document.createElement('div');
+  backdrop.id = '__video_isolator_backdrop';
+  document.body.appendChild(backdrop);
+
+  // Mark the video for overlay styling
   video.classList.add('__video_isolator_target');
   video.controls = true;
 
+  // Inject styles: backdrop covers all page content, video sits on top
   const style = document.createElement('style');
   style.id = '__video_isolator_style';
   style.textContent = `
+    #__video_isolator_backdrop {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 2147483646 !important;
+      background: #000 !important;
+    }
     .__video_isolator_target {
       position: fixed !important;
       top: 0 !important;
@@ -87,8 +91,8 @@ function isolateVideoFunction() {
       width: 100vw !important;
       height: 100vh !important;
       z-index: 2147483647 !important;
-      background: #000 !important;
       object-fit: contain !important;
+      background: #000 !important;
     }
     .__video_isolator_target::-webkit-media-controls {
       display: flex !important;
@@ -102,16 +106,17 @@ function isolateVideoFunction() {
 
 function restorePageFunction() {
   const style = document.getElementById('__video_isolator_style');
+  const backdrop = document.getElementById('__video_isolator_backdrop');
   const video = document.querySelector('.__video_isolator_target');
 
-  if (style || video) {
+  if (style || backdrop || video) {
     if (style) style.remove();
+    if (backdrop) backdrop.remove();
     if (video) {
       video.classList.remove('__video_isolator_target');
       video.controls = false;
     }
     return { success: true, message: "Page restored!" };
-  } else {
-    return { success: false, message: "No saved state to restore" };
   }
+  return { success: false, message: "No saved state to restore" };
 }
