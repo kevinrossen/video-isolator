@@ -36,7 +36,6 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 // --- Injected into page context ---
 
 function isolateVideoFunction() {
-  // Selectors to find the <video> element on each supported site.
   const SITE_SELECTORS = {
     "victoryplus.com": "#videoPlayerContainer video",
     "youtube.com": "#movie_player video",
@@ -62,16 +61,22 @@ function isolateVideoFunction() {
     return { success: false, message: "No video player found on this page" };
   }
 
-  // Add a black backdrop that covers everything on the page
+  // Save the video's original position so we can restore it
+  window.__videoIsolatorParent = video.parentElement;
+  window.__videoIsolatorNextSibling = video.nextSibling;
+
+  // Add a black backdrop that covers everything
   const backdrop = document.createElement('div');
   backdrop.id = '__video_isolator_backdrop';
   document.body.appendChild(backdrop);
 
-  // Mark the video for overlay styling
+  // Move video to body so it shares the same stacking context
+  // as the backdrop. appendChild moves the node atomically,
+  // preserving MediaSource connections and playback state.
+  document.body.appendChild(video);
   video.classList.add('__video_isolator_target');
   video.controls = true;
 
-  // Inject styles: backdrop covers all page content, video sits on top
   const style = document.createElement('style');
   style.id = '__video_isolator_style';
   style.textContent = `
@@ -115,6 +120,16 @@ function restorePageFunction() {
     if (video) {
       video.classList.remove('__video_isolator_target');
       video.controls = false;
+      // Move video back to its original position
+      if (window.__videoIsolatorParent) {
+        if (window.__videoIsolatorNextSibling) {
+          window.__videoIsolatorParent.insertBefore(video, window.__videoIsolatorNextSibling);
+        } else {
+          window.__videoIsolatorParent.appendChild(video);
+        }
+        window.__videoIsolatorParent = null;
+        window.__videoIsolatorNextSibling = null;
+      }
     }
     return { success: true, message: "Page restored!" };
   }
