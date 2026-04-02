@@ -3,7 +3,6 @@ const isolatedTabs = new Set();
 
 chrome.action.onClicked.addListener((tab) => {
   if (isolatedTabs.has(tab.id)) {
-    // Restore the page
     chrome.scripting.executeScript({
       target: {tabId: tab.id},
       func: restorePageFunction
@@ -13,7 +12,6 @@ chrome.action.onClicked.addListener((tab) => {
       }
     });
   } else {
-    // Isolate the video
     chrome.scripting.executeScript({
       target: {tabId: tab.id},
       func: isolateVideoFunction
@@ -25,7 +23,6 @@ chrome.action.onClicked.addListener((tab) => {
   }
 });
 
-// Clean up when tabs are closed or navigated away
 chrome.tabs.onRemoved.addListener((tabId) => {
   isolatedTabs.delete(tabId);
 });
@@ -41,121 +38,78 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
 function isolateVideoFunction() {
   const SITE_REGISTRY = {
     "victoryplus.com": {
-      selector: "#videoPlayerContainer"
+      videoSelector: "#videoPlayerContainer video"
     },
     "youtube.com": {
-      selector: "#movie_player"
+      videoSelector: "#movie_player video"
     },
     "vimeo.com": {
-      strategy: "vimeo-video"
+      videoSelector: "video"
     },
     "x.com": {
-      strategy: "x-video"
+      videoSelector: "article video"
     }
   };
 
-  function findSiteConfig(hostname) {
+  function findVideo(hostname) {
     for (const [domain, config] of Object.entries(SITE_REGISTRY)) {
       if (hostname === domain || hostname.endsWith('.' + domain)) {
-        return config;
+        return document.querySelector(config.videoSelector);
       }
     }
-    return null;
-  }
-
-  function findVideoPlayer(config) {
-    if (config.selector) {
-      return document.querySelector(config.selector);
-    }
-
-    if (config.strategy === "x-video") {
-      // Return the <video> element directly. X.com's custom player
-      // controls break after DOM extraction, so we use native
-      // browser controls instead. Grabbing just the video avoids
-      // including tweet text and poster info.
-      const article = document.querySelector('article');
-      if (!article) return null;
-      return article.querySelector('video');
-    }
-
-    if (config.strategy === "vimeo-video") {
-      // Vimeo uses Emotion CSS-in-JS with unstable class names.
-      // Find the <video> element and walk up 3 levels to the
-      // media area container (video → wrapper → player → media area).
-      const video = document.querySelector('video');
-      if (!video) return null;
-
-      let container = video;
-      for (let i = 0; i < 3 && container.parentElement; i++) {
-        container = container.parentElement;
-      }
-      return container;
-    }
-
     return null;
   }
 
   const hostname = window.location.hostname;
-  const config = findSiteConfig(hostname);
+  const video = findVideo(hostname);
 
-  if (!config) {
+  if (video === undefined) {
     return { success: false, message: "This site is not supported" };
   }
 
-  const videoPlayer = findVideoPlayer(config);
-
-  if (!videoPlayer) {
+  if (!video) {
     return { success: false, message: "No video player found on this page" };
   }
 
-  // Save original page state
-  if (!window.__originalHTML) {
-    window.__originalHTML = document.body.innerHTML;
-    window.__originalStyles = document.body.getAttribute('style') || '';
-  }
+  // Overlay the video using CSS instead of moving it in the DOM.
+  // This preserves MediaSource connections, keeps the video playing,
+  // and maintains all event listeners.
+  video.classList.add('__video_isolator_target');
+  video.controls = true;
 
-  // Clear the page and re-append the original player node
-  // (appendChild moves the live node, preserving video playback state)
-  document.body.innerHTML = '';
-  document.body.appendChild(videoPlayer);
-
-  // Style for fullscreen viewport fill
-  videoPlayer.style.width = '100vw';
-  videoPlayer.style.height = '100vh';
-  videoPlayer.style.position = 'fixed';
-  videoPlayer.style.top = '0';
-  videoPlayer.style.left = '0';
-  videoPlayer.style.zIndex = '999999';
-  videoPlayer.style.backgroundColor = '#000';
-
-  document.body.style.margin = '0';
-  document.body.style.padding = '0';
-  document.body.style.overflow = 'hidden';
-  document.body.style.backgroundColor = '#000';
-
-  // Enable native browser controls and force them visible.
-  // Sites like x.com use CSS to hide native controls since they
-  // have their own custom UI, so we override with !important.
-  const video = videoPlayer.querySelector('video');
-  if (video) {
-    video.controls = true;
-    video.style.width = '100%';
-    video.style.height = '100%';
-    video.style.objectFit = 'contain';
-  }
   const style = document.createElement('style');
-  style.textContent = 'video::-webkit-media-controls { display: flex !important; opacity: 1 !important; }';
+  style.id = '__video_isolator_style';
+  style.textContent = `
+    .__video_isolator_target {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 2147483647 !important;
+      background: #000 !important;
+      object-fit: contain !important;
+    }
+    .__video_isolator_target::-webkit-media-controls {
+      display: flex !important;
+      opacity: 1 !important;
+    }
+  `;
   document.head.appendChild(style);
 
   return { success: true, message: "Video isolated!" };
 }
 
 function restorePageFunction() {
-  if (window.__originalHTML) {
-    document.body.innerHTML = window.__originalHTML;
-    document.body.setAttribute('style', window.__originalStyles);
-    window.__originalHTML = null;
-    window.__originalStyles = null;
+  const style = document.getElementById('__video_isolator_style');
+  const video = document.querySelector('.__video_isolator_target');
+
+  if (style || video) {
+    if (style) style.remove();
+    if (video) {
+      video.classList.remove('__video_isolator_target');
+      video.controls = false;
+    }
     return { success: true, message: "Page restored!" };
   } else {
     return { success: false, message: "No saved state to restore" };
